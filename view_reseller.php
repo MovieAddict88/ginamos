@@ -30,14 +30,9 @@ $stmt->bindParam(':reseller_id', $reseller_id, PDO::PARAM_INT);
 $stmt->execute();
 $reseller = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if (!$reseller) {
-    header('location: reseller_management.php');
-    exit;
-}
-
 // Fetch clients for the reseller
 $stmt = $pdo->prepare("
-    SELECT u.id, u.username, u.first_name, u.last_name, u.contact_number, u.daily_limit, u.data_usage
+    SELECT u.id, u.username, u.first_name, u.last_name, u.contact_number
     FROM users u
     WHERE u.reseller_id = :reseller_user_id
 ");
@@ -96,8 +91,6 @@ include 'header.php';
                     <th>Username</th>
                     <th>Name</th>
                     <th>Contact Number</th>
-                    <th>Daily Limit</th>
-                    <th>Data Usage</th>
                 </tr>
             </thead>
             <tbody>
@@ -106,8 +99,6 @@ include 'header.php';
                         <td><?php echo htmlspecialchars($client['username']); ?></td>
                         <td><?php echo htmlspecialchars($client['first_name'] . ' ' . $client['last_name']); ?></td>
                         <td><?php echo htmlspecialchars($client['contact_number']); ?></td>
-                        <td><?php echo format_bytes($client['daily_limit']); ?></td>
-                        <td><?php echo format_bytes($client['data_usage']); ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
