@@ -1,0 +1,4 @@
+[Tue Dec 23 23:30:23 2025] Failed to listen on localhost:8080 (reason: Address already in use)
+c 23 23:30:23 2025] [::1]:42914 Accepted
+[Tue Dec 23 23:30:23 2025] [::1]:42914 [302]: HEAD /view_reseller.php?id=99999
+[Tue Dec 23 23:30:23 2025] [::1]:42914 Closing
