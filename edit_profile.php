@@ -58,19 +58,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     // Check for errors before updating the database
     if (empty($profile_name_err) && empty($profile_content_err)) {
-        $sql = 'UPDATE vpn_profiles SET name = :profile_name, ovpn_config = :profile_content, type = :profile_type, icon_path = :icon_path, promo_id = :promo_id, management_ip = :management_ip, management_port = :management_port WHERE id = :id';
+        $sql = 'UPDATE vpn_profiles SET name = :profile_name, ovpn_config = :profile_content, type = :profile_type, icon_path = :icon_path, management_ip = :management_ip, management_port = :management_port WHERE id = :id';
 
         if ($stmt = $pdo->prepare($sql)) {
             $stmt->bindParam(':profile_name', $profile_name, PDO::PARAM_STR);
             $stmt->bindParam(':profile_content', $profile_content, PDO::PARAM_STR);
             $stmt->bindParam(':profile_type', $_POST['profile_type'], PDO::PARAM_STR);
             $stmt->bindParam(':icon_path', $_POST['icon_path'], PDO::PARAM_STR);
-            $stmt->bindParam(':promo_id', $_POST['promo_id'], PDO::PARAM_INT);
             $stmt->bindParam(':management_ip', $_POST['management_ip'], PDO::PARAM_STR);
             $stmt->bindParam(':management_port', $_POST['management_port'], PDO::PARAM_INT);
             $stmt->bindParam(':id', $profile_id, PDO::PARAM_INT);
 
             if ($stmt->execute()) {
+                // First, remove existing promo associations
+                $sql = 'DELETE FROM profile_promos WHERE profile_id = :profile_id';
+                $stmt = $pdo->prepare($sql);
+                $stmt->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+                $stmt->execute();
+
+                // Then, add the new promo associations
+                if (!empty($_POST['promo_ids'])) {
+                    $promo_ids = $_POST['promo_ids'];
+                    $sql = 'INSERT INTO profile_promos (profile_id, promo_id) VALUES (:profile_id, :promo_id)';
+                    $insert_stmt = $pdo->prepare($sql);
+                    foreach ($promo_ids as $promo_id) {
+                        $insert_stmt->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+                        $insert_stmt->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
+                        $insert_stmt->execute();
+                    }
+                }
                 header('location: profiles.php');
                 exit;
             } else {
