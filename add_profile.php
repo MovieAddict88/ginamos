@@ -61,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit;
         } catch (Exception $e) {
             $pdo->rollBack();
+            error_log('Error in add_profile.php: ' . $e->getMessage());
             echo 'Something went wrong. Please try again later.';
         }
     }
