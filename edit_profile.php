@@ -24,7 +24,7 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
 }
 
 // Fetch the profile from the database
-$stmt = $pdo->prepare('SELECT name, ovpn_config, type, icon_path, promo_id, management_ip, management_port FROM vpn_profiles WHERE id = :id');
+$stmt = $pdo->prepare('SELECT name, ovpn_config, type, icon_path, management_ip, management_port FROM vpn_profiles WHERE id = :id');
 $stmt->bindParam(':id', $profile_id, PDO::PARAM_INT);
 $stmt->execute();
 $profile = $stmt->fetch();
@@ -40,6 +40,12 @@ if ($profile) {
     header('location: profiles.php');
     exit;
 }
+
+// Fetch the associated promos for the profile
+$stmt_promos = $pdo->prepare('SELECT promo_id FROM profile_promos WHERE profile_id = :profile_id');
+$stmt_promos->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+$stmt_promos->execute();
+$associated_promo_ids = $stmt_promos->fetchAll(PDO::FETCH_COLUMN, 0);
 
 // Process form data when the form is submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -58,24 +64,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     // Check for errors before updating the database
     if (empty($profile_name_err) && empty($profile_content_err)) {
-        $sql = 'UPDATE vpn_profiles SET name = :profile_name, ovpn_config = :profile_content, type = :profile_type, icon_path = :icon_path, promo_id = :promo_id, management_ip = :management_ip, management_port = :management_port WHERE id = :id';
+        $pdo->beginTransaction();
+        try {
+            $sql = 'UPDATE vpn_profiles SET name = :profile_name, ovpn_config = :profile_content, type = :profile_type, icon_path = :icon_path, management_ip = :management_ip, management_port = :management_port WHERE id = :id';
 
-        if ($stmt = $pdo->prepare($sql)) {
-            $stmt->bindParam(':profile_name', $profile_name, PDO::PARAM_STR);
-            $stmt->bindParam(':profile_content', $profile_content, PDO::PARAM_STR);
-            $stmt->bindParam(':profile_type', $_POST['profile_type'], PDO::PARAM_STR);
-            $stmt->bindParam(':icon_path', $_POST['icon_path'], PDO::PARAM_STR);
-            $stmt->bindParam(':promo_id', $_POST['promo_id'], PDO::PARAM_INT);
-            $stmt->bindParam(':management_ip', $_POST['management_ip'], PDO::PARAM_STR);
-            $stmt->bindParam(':management_port', $_POST['management_port'], PDO::PARAM_INT);
-            $stmt->bindParam(':id', $profile_id, PDO::PARAM_INT);
+            if ($stmt = $pdo->prepare($sql)) {
+                $stmt->bindParam(':profile_name', $profile_name, PDO::PARAM_STR);
+                $stmt->bindParam(':profile_content', $profile_content, PDO::PARAM_STR);
+                $stmt->bindParam(':profile_type', $_POST['profile_type'], PDO::PARAM_STR);
+                $stmt->bindParam(':icon_path', $_POST['icon_path'], PDO::PARAM_STR);
+                $stmt->bindParam(':management_ip', $_POST['management_ip'], PDO::PARAM_STR);
+                $stmt->bindParam(':management_port', $_POST['management_port'], PDO::PARAM_INT);
+                $stmt->bindParam(':id', $profile_id, PDO::PARAM_INT);
 
-            if ($stmt->execute()) {
-                header('location: profiles.php');
-                exit;
-            } else {
-                echo 'Something went wrong. Please try again later.';
+                if ($stmt->execute()) {
+                    // First, remove all existing promo associations for this profile
+                    $sql_delete = 'DELETE FROM profile_promos WHERE profile_id = :profile_id';
+                    $stmt_delete = $pdo->prepare($sql_delete);
+                    $stmt_delete->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+                    $stmt_delete->execute();
+
+                    // Now, add the new promo associations
+                    if (!empty($_POST['promo_ids']) && is_array($_POST['promo_ids'])) {
+                        $sql_assoc = 'INSERT INTO profile_promos (profile_id, promo_id) VALUES (:profile_id, :promo_id)';
+                        $stmt_assoc = $pdo->prepare($sql_assoc);
+                        foreach ($_POST['promo_ids'] as $promo_id) {
+                            $stmt_assoc->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+                            $stmt_assoc->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
+                            $stmt_assoc->execute();
+                        }
+                    }
+
+                    $pdo->commit();
+                    header('location: profiles.php');
+                    exit;
+                } else {
+                    $pdo->rollBack();
+                    echo 'Something went wrong with profile update. Please try again later.';
+                }
             }
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            echo 'Something went wrong. Please try again later. Error: ' . $e->getMessage();
         }
     }
 }
@@ -136,18 +166,26 @@ include 'header.php';
                 </select>
             </div>
             <div class="form-group">
-                <label>Promo</label>
-                <select name="promo_id" class="form-control">
-                    <option value="">Select Promo</option>
+                <label>Promos</label>
+                <div class="promo-checkbox-group" style="height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
                     <?php
-                    $sql = 'SELECT id, promo_name FROM promos';
+                    $sql = 'SELECT id, promo_name FROM promos ORDER BY promo_name';
                     $promos = $pdo->query($sql)->fetchAll();
-                    foreach ($promos as $promo) {
-                        $selected = ($promo['id'] == $profile['promo_id']) ? 'selected' : '';
-                        echo "<option value='" . $promo['id'] . "' " . $selected . ">" . htmlspecialchars($promo['promo_name']) . "</option>";
+                    if (empty($promos)) {
+                        echo '<p>No promos available.</p>';
+                    } else {
+                        foreach ($promos as $promo) {
+                            $is_checked = in_array($promo['id'], $associated_promo_ids);
+                            echo '<div class="form-check">';
+                            echo '<input class="form-check-input" type="checkbox" name="promo_ids[]" value="' . $promo['id'] . '" id="promo_' . $promo['id'] . '"' . ($is_checked ? ' checked' : '') . '>';
+                            echo '<label class="form-check-label" for="promo_' . $promo['id'] . '">';
+                            echo htmlspecialchars($promo['promo_name']);
+                            echo '</label>';
+                            echo '</div>';
+                        }
                     }
                     ?>
-                </select>
+                </div>
             </div>
             <div class="form-group">
                 <input type="submit" class="btn btn-primary" value="Submit">
