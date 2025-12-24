@@ -37,59 +37,67 @@ try {
         exit;
     }
 
-    // Check if promo_id is set in the POST request
-    if (isset($_POST['promo_id']) && !empty($_POST['promo_id'])) {
-        $promo_id = $_POST['promo_id'];
+    // Prepare a select statement to retrieve profiles and their associated promo configurations
+    $sql = "
+        SELECT
+            p.id,
+            p.name AS profile_name,
+            p.ovpn_config,
+            pr.config_text,
+            p.type as profile_type,
+            p.icon_path,
+            pr.id as promo_id,
+            pr.promo_name
+        FROM
+            vpn_profiles p
+        JOIN
+            profile_promos pp ON p.id = pp.profile_id
+        JOIN
+            promos pr ON pp.promo_id = pr.id
+        ORDER BY
+            p.name ASC, pr.promo_name ASC";
 
-        // Prepare a select statement to retrieve profiles and their associated promo configurations
-        $sql = "
-            SELECT
-                p.id,
-                p.name AS profile_name,
-                p.ovpn_config,
-                pr.config_text,
-                p.type as profile_type,
-                p.icon_path
-            FROM
-                vpn_profiles p
-            LEFT JOIN
-                promos pr ON p.promo_id = pr.id
-            WHERE
-                p.promo_id = :promo_id
-            ORDER BY
-                p.name ASC";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute();
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
-        $stmt->execute();
-        $profiles = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        // If no promo_id is provided, return an empty list of profiles.
-        $profiles = [];
+    $profiles = [];
+    foreach ($results as $row) {
+        $profile_id = $row['id'];
+        if (!isset($profiles[$profile_id])) {
+            $profiles[$profile_id] = [
+                'id' => $profile_id,
+                'profile_name' => $row['profile_name'],
+                'profile_type' => $row['profile_type'],
+                'icon_path' => $row['icon_path'],
+                'promos' => [],
+            ];
+        }
+
+        $profiles[$profile_id]['promos'][] = [
+            'promo_id' => $row['promo_id'],
+            'promo_name' => $row['promo_name'],
+            'profile_content' => $row['ovpn_config'] . "\n" . $row['config_text'],
+        ];
     }
 
     $base_url = get_base_url();
-    foreach ($profiles as &$profile) {
-        // Combine the base ovpn config with the promo's config text
-        $profile['profile_content'] = $profile['ovpn_config'] . "\n" . $profile['config_text'];
-
-        // Unset the original config fields to keep the response clean
-        unset($profile['ovpn_config']);
-        unset($profile['config_text']);
-
+    $response_profiles = [];
+    foreach ($profiles as $profile) {
         if (!empty($profile['icon_path'])) {
             $profile['icon_path'] = $base_url . $profile['icon_path'];
         }
         // Simulate ping for each profile
         $profile['ping'] = rand(20, 200);
         $profile['signal_strength'] = rand(30, 100);
+        $response_profiles[] = $profile;
     }
 
     // Set the content type header to application/json
     header('Content-Type: application/json');
 
     // Output the profiles as a JSON encoded string
-    echo json_encode(['status' => 'success', 'profiles' => $profiles]);
+    echo json_encode(['status' => 'success', 'profiles' => $response_profiles]);
 
 } catch (PDOException $e) {
     // Handle potential database errors
