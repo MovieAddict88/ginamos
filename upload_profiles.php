@@ -17,7 +17,7 @@ $error_message = '';
 // Check if a file was uploaded and a name was provided
 if (isset($_FILES['profiles_ovpn']) && isset($_POST['profile_type'])) {
     $profile_type = trim($_POST['profile_type']);
-    $promo_id = !empty($_POST['promo_id']) ? intval($_POST['promo_id']) : null;
+    $promo_ids = isset($_POST['promo_ids']) ? $_POST['promo_ids'] : [];
     $icon_path = trim($_POST['icon_path']);
 
     // Validate icon_path
@@ -26,50 +26,55 @@ if (isset($_FILES['profiles_ovpn']) && isset($_POST['profile_type'])) {
         $error_message = 'Invalid icon selected.';
     }
 
-    // Validate promo_id
-    if ($promo_id !== null) {
-        $sql = 'SELECT id FROM promos WHERE id = :promo_id';
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
-        $stmt->execute();
-        if ($stmt->rowCount() == 0) {
-            $error_message = 'Invalid promo selected.';
-        }
-    }
-
     if(empty($error_message)) {
         $files = $_FILES['profiles_ovpn'];
         $file_count = count($files['name']);
         $upload_count = 0;
 
-        for ($i = 0; $i < $file_count; $i++) {
-            $file_name = $files['name'][$i];
-            $file_tmp_name = $files['tmp_name'][$i];
-            $file_size = $files['size'][$i];
-            $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        $pdo->beginTransaction();
+        try {
+            for ($i = 0; $i < $file_count; $i++) {
+                $file_name = $files['name'][$i];
+                $file_tmp_name = $files['tmp_name'][$i];
+                $file_size = $files['size'][$i];
+                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
-            if ($file_ext == 'ovpn' && $file_size <= 1000000) {
-                $profile_name = pathinfo($file_name, PATHINFO_FILENAME);
-                $ovpn_config = file_get_contents($file_tmp_name);
+                if ($file_ext == 'ovpn' && $file_size <= 1000000) {
+                    $profile_name = pathinfo($file_name, PATHINFO_FILENAME);
+                    $ovpn_config = file_get_contents($file_tmp_name);
 
-                $sql = 'INSERT INTO vpn_profiles (name, ovpn_config, type, icon_path, promo_id) VALUES (:name, :ovpn_config, :type, :icon_path, :promo_id)';
-                if ($stmt = $pdo->prepare($sql)) {
-                    $stmt->bindParam(':name', $profile_name, PDO::PARAM_STR);
-                    $stmt->bindParam(':ovpn_config', $ovpn_config, PDO::PARAM_STR);
-                    $stmt->bindParam(':type', $profile_type, PDO::PARAM_STR);
-                    $stmt->bindParam(':icon_path', $icon_path, PDO::PARAM_STR);
-                    $stmt->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
-                    if ($stmt->execute()) {
-                        $upload_count++;
+                    $sql = 'INSERT INTO vpn_profiles (name, ovpn_config, type, icon_path) VALUES (:name, :ovpn_config, :type, :icon_path)';
+                    if ($stmt = $pdo->prepare($sql)) {
+                        $stmt->bindParam(':name', $profile_name, PDO::PARAM_STR);
+                        $stmt->bindParam(':ovpn_config', $ovpn_config, PDO::PARAM_STR);
+                        $stmt->bindParam(':type', $profile_type, PDO::PARAM_STR);
+                        $stmt->bindParam(':icon_path', $icon_path, PDO::PARAM_STR);
+                        if ($stmt->execute()) {
+                            $profile_id = $pdo->lastInsertId();
+                            if (!empty($promo_ids) && is_array($promo_ids)) {
+                                $sql_assoc = 'INSERT INTO profile_promos (profile_id, promo_id) VALUES (:profile_id, :promo_id)';
+                                $stmt_assoc = $pdo->prepare($sql_assoc);
+                                foreach ($promo_ids as $promo_id) {
+                                    $stmt_assoc->bindParam(':profile_id', $profile_id, PDO::PARAM_INT);
+                                    $stmt_assoc->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
+                                    $stmt_assoc->execute();
+                                }
+                            }
+                            $upload_count++;
+                        }
                     }
                 }
             }
+            $pdo->commit();
+            if ($upload_count > 0) {
+                $upload_message = $upload_count . ' of ' . $file_count . ' profiles uploaded successfully.';
+            } else {
+                $error_message = 'No profiles were uploaded. Please check the file types and sizes.';
+            }
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $error_message = 'An error occurred: ' . $e->getMessage();
         }
-    }
-    if ($upload_count > 0) {
-        $upload_message = $upload_count . ' of ' . $file_count . ' profiles uploaded successfully.';
-    } else {
-        $error_message = 'No profiles were uploaded. Please check the file types and sizes.';
     }
 }
 
@@ -111,17 +116,25 @@ include 'header.php';
                 </select>
             </div>
             <div class="form-group">
-                <label>Promo</label>
-                <select name="promo_id" class="form-control">
-                    <option value="">Select Promo</option>
+                <label>Promos</label>
+                <div class="promo-checkbox-group" style="height: 150px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; border-radius: 4px;">
                     <?php
-                    $sql = 'SELECT id, promo_name FROM promos';
+                    $sql = 'SELECT id, promo_name FROM promos ORDER BY promo_name';
                     $promos = $pdo->query($sql)->fetchAll();
-                    foreach ($promos as $promo) {
-                        echo "<option value='" . $promo['id'] . "'>" . htmlspecialchars($promo['promo_name']) . "</option>";
+                    if (empty($promos)) {
+                        echo '<p>No promos available.</p>';
+                    } else {
+                        foreach ($promos as $promo) {
+                            echo '<div class="form-check">';
+                            echo '<input class="form-check-input" type="checkbox" name="promo_ids[]" value="' . $promo['id'] . '" id="promo_' . $promo['id'] . '">';
+                            echo '<label class="form-check-label" for="promo_' . $promo['id'] . '">';
+                            echo htmlspecialchars($promo['promo_name']);
+                            echo '</label>';
+                            echo '</div>';
+                        }
                     }
                     ?>
-                </select>
+                </div>
             </div>
             <div class="form-group">
                 <label for="profiles_ovpn">Select .ovpn files to upload:</label>
