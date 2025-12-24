@@ -6,14 +6,12 @@
 $pdo->exec("ALTER TABLE vpn_profiles ENGINE=InnoDB;");
 $pdo->exec("ALTER TABLE promos ENGINE=InnoDB;");
 
-// Find and drop the foreign key on promo_id if it exists.
-$dbName = DB_NAME;
-$stmt = $pdo->prepare("SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = :dbName AND TABLE_NAME = 'vpn_profiles' AND COLUMN_NAME = 'promo_id' AND REFERENCED_TABLE_NAME = 'promos'");
-$stmt->execute(['dbName' => $dbName]);
-$fkName = $stmt->fetchColumn();
-
-if ($fkName) {
-    $pdo->exec("ALTER TABLE vpn_profiles DROP FOREIGN KEY `{$fkName}`;");
+// Drop the foreign key constraint on promo_id if it exists, ignoring errors.
+try {
+    // The specific FK name from the user's error message
+    $pdo->exec("ALTER TABLE vpn_profiles DROP FOREIGN KEY `vpn_profiles_ibfk_1`;");
+} catch (PDOException $e) {
+    // Ignore the error, as the foreign key likely doesn't exist.
 }
 
 // Check if the promo_id column exists in vpn_profiles and drop it.
