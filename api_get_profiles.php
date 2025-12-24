@@ -41,48 +41,65 @@ try {
     if (isset($_POST['promo_id']) && !empty($_POST['promo_id'])) {
         $promo_id = $_POST['promo_id'];
 
-        // Prepare a select statement to retrieve profiles and their associated promo configurations
+        // Prepare a select statement to retrieve profiles and all their associated promo configurations
         $sql = "
             SELECT
                 p.id,
                 p.name AS profile_name,
                 p.ovpn_config,
-                pr.config_text,
-                p.type as profile_type,
-                p.icon_path
+                p.type AS profile_type,
+                p.icon_path,
+                GROUP_CONCAT(pr.id) as promo_ids,
+                GROUP_CONCAT(pr.promo_name) as promo_names,
+                GROUP_CONCAT(pr.config_text SEPARATOR '|||') as promo_configs
             FROM
                 vpn_profiles p
-            LEFT JOIN
-                promos pr ON p.promo_id = pr.id
+            JOIN
+                profile_promos pp ON p.id = pp.profile_id
+            JOIN
+                promos pr ON pp.promo_id = pr.id
             WHERE
-                p.promo_id = :promo_id
+                p.id IN (SELECT profile_id FROM profile_promos WHERE promo_id = :promo_id)
+            GROUP BY
+                p.id, p.name, p.ovpn_config, p.type, p.icon_path
             ORDER BY
                 p.name ASC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->bindParam(':promo_id', $promo_id, PDO::PARAM_INT);
         $stmt->execute();
-        $profiles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $profiles_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $profiles = [];
+        $base_url = get_base_url();
+
+        foreach ($profiles_raw as $profile_raw) {
+            $promo_ids_arr = explode(',', $profile_raw['promo_ids']);
+            $promo_names_arr = explode(',', $profile_raw['promo_names']);
+            $promo_configs_arr = explode('|||', $profile_raw['promo_configs']);
+
+            $promos_list = [];
+            for ($i = 0; $i < count($promo_ids_arr); $i++) {
+                $promos_list[] = [
+                    'promo_id' => $promo_ids_arr[$i],
+                    'promo_name' => $promo_names_arr[$i],
+                    'profile_content' => $profile_raw['ovpn_config'] . "\n" . $promo_configs_arr[$i],
+                ];
+            }
+
+            $profiles[] = [
+                'id' => $profile_raw['id'],
+                'profile_name' => $profile_raw['profile_name'],
+                'profile_type' => $profile_raw['profile_type'],
+                'icon_path' => !empty($profile_raw['icon_path']) ? $base_url . $profile_raw['icon_path'] : null,
+                'ping' => rand(20, 200),
+                'signal_strength' => rand(30, 100),
+                'promos' => $promos_list,
+            ];
+        }
     } else {
         // If no promo_id is provided, return an empty list of profiles.
         $profiles = [];
-    }
-
-    $base_url = get_base_url();
-    foreach ($profiles as &$profile) {
-        // Combine the base ovpn config with the promo's config text
-        $profile['profile_content'] = $profile['ovpn_config'] . "\n" . $profile['config_text'];
-
-        // Unset the original config fields to keep the response clean
-        unset($profile['ovpn_config']);
-        unset($profile['config_text']);
-
-        if (!empty($profile['icon_path'])) {
-            $profile['icon_path'] = $base_url . $profile['icon_path'];
-        }
-        // Simulate ping for each profile
-        $profile['ping'] = rand(20, 200);
-        $profile['signal_strength'] = rand(30, 100);
     }
 
     // Set the content type header to application/json

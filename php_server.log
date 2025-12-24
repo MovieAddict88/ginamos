@@ -1,0 +1,29 @@
+[Wed Dec 24 03:16:28 2025] PHP 8.3.6 Development Server (http://localhost:8000) started
+[Wed Dec 24 03:16:29 2025] [::1]:55576 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55576 [200]: GET /login.php
+[Wed Dec 24 03:16:29 2025] [::1]:55576 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55582 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55582 [200]: GET /style.css
+[Wed Dec 24 03:16:29 2025] [::1]:55582 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55584 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55584 [404]: GET /icon.png?v=1766546189 - No such file or directory
+[Wed Dec 24 03:16:29 2025] [::1]:55584 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55600 Accepted
+[Wed Dec 24 03:16:29 2025] PHP Notice:  session_start(): Ignoring session_start() because a session is already active (started from /app/login.php on line 3) in /app/login.php on line 62
+[Wed Dec 24 03:16:29 2025] [::1]:55600 [302]: POST /login.php
+[Wed Dec 24 03:16:29 2025] [::1]:55600 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55604 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55604 [302]: GET /index.php
+[Wed Dec 24 03:16:29 2025] [::1]:55604 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55608 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55608 [200]: GET /dashboard.php
+[Wed Dec 24 03:16:29 2025] [::1]:55608 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55610 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55610 [200]: GET /style.css?v=1.2
+[Wed Dec 24 03:16:29 2025] [::1]:55610 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55626 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55626 [200]: GET /add_profile.php
+[Wed Dec 24 03:16:29 2025] [::1]:55626 Closing
+[Wed Dec 24 03:16:29 2025] [::1]:55636 Accepted
+[Wed Dec 24 03:16:29 2025] [::1]:55636 [200]: GET /style.css?v=1.2
+[Wed Dec 24 03:16:29 2025] [::1]:55636 Closing
